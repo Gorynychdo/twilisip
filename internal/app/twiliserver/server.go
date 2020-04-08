@@ -45,7 +45,7 @@ func (s *server) serve() error {
 func (s *server) configureRouter() {
     s.engine.Use(s.logRequest())
     s.engine.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-        return fmt.Sprintf("[%v] |%s %3d %s|%s %s %s| %s %s %s\n",
+        return fmt.Sprintf("[%v] |%s %3d %s|%s %s %s| %s %s | %s\n",
             param.TimeStamp.Format("2006/01/02 - 15:04:05"),
             param.StatusCodeColor(), param.StatusCode, param.ResetColor(),
             param.MethodColor(), param.Method, param.ResetColor(),
@@ -75,8 +75,8 @@ func (s *server) logRequest() gin.HandlerFunc {
 }
 
 func (s *server) register(c *gin.Context) {
-    var json model.Phone
-    if err := c.ShouldBindJSON(&json); err != nil {
+    var phone model.Phone
+    if err := c.ShouldBindJSON(&phone); err != nil {
         c.Set(ctxKeyResult, err)
         s.error(c, http.StatusBadRequest, errWrongParameters)
         return
@@ -84,19 +84,30 @@ func (s *server) register(c *gin.Context) {
 
     res, err := grequests.Post(s.config.TwilioCallerIDURL, &grequests.RequestOptions{
         Auth: []string{s.config.TwilioAccountSID, s.config.TwilioAuthToken},
-        Data: map[string]string{"PhoneNumber": json.Number},
+        Data: map[string]string{"PhoneNumber": phone.Number},
     })
     if err != nil {
         c.Set(ctxKeyResult, err)
         s.error(c, http.StatusBadRequest, errWrongParameters)
         return
     }
-
     defer res.Close()
 
-    response := gin.H{"res": res.String()}
-    c.Set(ctxKeyResult, mustJson(response))
-    c.JSON(200, response)
+    response, err := model.NewTwilioCallerId(res.Bytes())
+    if err != nil {
+        c.Set(ctxKeyResult, err)
+        s.error(c, http.StatusBadRequest, errWrongParameters)
+        return
+    }
+
+    if response.Status != 200 {
+        c.Set(ctxKeyResult, response.Message)
+        s.error(c, http.StatusBadRequest, errors.New(response.Message))
+        return
+    }
+
+    c.Set(ctxKeyResult, response.Dump())
+    c.JSON(200, gin.H{"code": response.Code})
 }
 
 func (s *server) error(c *gin.Context, status int, err error) {
