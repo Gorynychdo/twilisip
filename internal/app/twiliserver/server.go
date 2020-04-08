@@ -56,7 +56,8 @@ func (s *server) configureRouter() {
     }))
     s.engine.Use(gin.Recovery())
 
-    s.engine.POST("/register", s.register)
+    s.engine.POST("/v1/confirm", s.confirm)
+    s.engine.POST("/v1/callback", s.callback)
 }
 
 func (s *server) logRequest() gin.HandlerFunc {
@@ -74,7 +75,7 @@ func (s *server) logRequest() gin.HandlerFunc {
     }
 }
 
-func (s *server) register(c *gin.Context) {
+func (s *server) confirm(c *gin.Context) {
     var phone model.Phone
     if err := c.ShouldBindJSON(&phone); err != nil {
         c.Set(ctxKeyResult, err)
@@ -84,7 +85,10 @@ func (s *server) register(c *gin.Context) {
 
     res, err := grequests.Post(s.config.TwilioCallerIDURL, &grequests.RequestOptions{
         Auth: []string{s.config.TwilioAccountSID, s.config.TwilioAuthToken},
-        Data: map[string]string{"PhoneNumber": phone.Number},
+        Data: map[string]string{
+            "PhoneNumber":    phone.Number,
+            "StatusCallback": s.config.TwilioCallbackURL,
+        },
     })
     if err != nil {
         c.Set(ctxKeyResult, err)
@@ -100,18 +104,31 @@ func (s *server) register(c *gin.Context) {
         return
     }
 
-    if response.Status != 200 {
+    if response.Status != http.StatusOK {
         c.Set(ctxKeyResult, response.Message)
         s.error(c, http.StatusBadRequest, errors.New(response.Message))
         return
     }
 
     c.Set(ctxKeyResult, response.Dump())
-    c.JSON(200, gin.H{"code": response.Code})
+    c.JSON(http.StatusOK, gin.H{
+        "status": http.StatusOK,
+        "code":   response.Code,
+    })
+}
+
+func (s *server) callback(c *gin.Context) {
+    var status model.TwilioStatus
+    if err := c.ShouldBindJSON(&status); err != nil {
+        c.Set(ctxKeyResult, err)
+        return
+    }
+
+    c.Set(ctxKeyResult, "OK")
 }
 
 func (s *server) error(c *gin.Context, status int, err error) {
-    c.JSON(status, gin.H{
+    c.AbortWithStatusJSON(status, gin.H{
         "status": status,
         "error":  err.Error(),
     })
