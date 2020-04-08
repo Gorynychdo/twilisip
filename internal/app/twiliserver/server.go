@@ -118,13 +118,15 @@ func (s *server) confirm(c *gin.Context) {
 }
 
 func (s *server) callback(c *gin.Context) {
-    var status model.TwilioStatus
-    if err := c.ShouldBindJSON(&status); err != nil {
-        c.Set(ctxKeyResult, err)
-        return
+    status := &model.TwilioStatus{
+        Status: c.PostForm("VerificationStatus"),
+        To:     c.PostForm("To"),
+        Date:   c.PostForm("Timestamp"),
+        SID:    c.PostForm("CallSid"),
     }
 
-    c.Set(ctxKeyResult, "OK")
+    c.Set(ctxKeyReqBody, status.Dump())
+    c.Set(ctxKeyResult, "")
 }
 
 func (s *server) error(c *gin.Context, status int, err error) {
