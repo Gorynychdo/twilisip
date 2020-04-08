@@ -2,6 +2,7 @@ package twiliserver
 
 import (
     "bytes"
+    "errors"
     "fmt"
     "io"
     "io/ioutil"
@@ -13,7 +14,12 @@ import (
 )
 
 const (
-    ctxKeyReqBody = "req_body"
+    ctxKeyReqBody = "request_body"
+    ctxKeyResult  = "result"
+)
+
+var (
+    errWrongParameters = errors.New("wrong parameters")
 )
 
 type server struct {
@@ -39,12 +45,13 @@ func (s *server) serve() error {
 func (s *server) configureRouter() {
     s.engine.Use(s.logRequest())
     s.engine.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-        return fmt.Sprintf("[%v] |%s %3d %s|%s %s %s| %s %s\n",
+        return fmt.Sprintf("[%v] |%s %3d %s|%s %s %s| %s %s %s\n",
             param.TimeStamp.Format("2006/01/02 - 15:04:05"),
             param.StatusCodeColor(), param.StatusCode, param.ResetColor(),
             param.MethodColor(), param.Method, param.ResetColor(),
             param.Path,
             param.Keys[ctxKeyReqBody],
+            param.Keys[ctxKeyResult],
         )
     }))
     s.engine.Use(gin.Recovery())
@@ -70,22 +77,26 @@ func (s *server) logRequest() gin.HandlerFunc {
 func (s *server) register(c *gin.Context) {
     var json model.Phone
     if err := c.ShouldBindJSON(&json); err != nil {
-        s.error(c, http.StatusBadRequest, err)
+        c.Set(ctxKeyResult, err)
+        s.error(c, http.StatusBadRequest, errWrongParameters)
         return
     }
 
-    ro := &grequests.RequestOptions{
+    res, err := grequests.Post(s.config.TwilioCallerIDURL, &grequests.RequestOptions{
         Auth: []string{s.config.TwilioAccountSID, s.config.TwilioAuthToken},
         Data: map[string]string{"PhoneNumber": json.Number},
-    }
-
-    _, err := grequests.Post(s.config.TwilioCallerIDURL, ro)
+    })
     if err != nil {
-        s.error(c, http.StatusBadRequest, err)
+        c.Set(ctxKeyResult, err)
+        s.error(c, http.StatusBadRequest, errWrongParameters)
         return
     }
 
-    c.JSON(200, gin.H{"status": "OK"})
+    defer res.Close()
+
+    response := gin.H{"res": res.String()}
+    c.Set(ctxKeyResult, mustJson(response))
+    c.JSON(200, response)
 }
 
 func (s *server) error(c *gin.Context, status int, err error) {
