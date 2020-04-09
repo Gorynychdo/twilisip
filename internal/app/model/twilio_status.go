@@ -12,10 +12,6 @@ type TwilioStatus struct {
 }
 
 func (ts *TwilioStatus) Dump() string {
-    b, err := json.Marshal(ts)
-    if err != nil {
-        return ""
-    }
-
+    b, _ := json.Marshal(ts)
     return string(b)
 }

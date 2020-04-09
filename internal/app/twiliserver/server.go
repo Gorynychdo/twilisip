@@ -20,6 +20,7 @@ const (
 
 var (
     errWrongParameters = errors.New("wrong parameters")
+    errVerifyFailed    = errors.New("verification failed")
 )
 
 type server struct {
@@ -56,7 +57,7 @@ func (s *server) configureRouter() {
     }))
     s.engine.Use(gin.Recovery())
 
-    s.engine.POST("/v1/confirm", s.confirm)
+    s.engine.POST("/v1/register", s.register)
     s.engine.POST("/v1/callback", s.callback)
 }
 
@@ -75,7 +76,7 @@ func (s *server) logRequest() gin.HandlerFunc {
     }
 }
 
-func (s *server) confirm(c *gin.Context) {
+func (s *server) register(c *gin.Context) {
     var phone model.Phone
     if err := c.ShouldBindJSON(&phone); err != nil {
         c.Set(ctxKeyResult, err)
@@ -106,7 +107,7 @@ func (s *server) confirm(c *gin.Context) {
 
     if response.Status != http.StatusOK {
         c.Set(ctxKeyResult, response.Message)
-        s.error(c, http.StatusBadRequest, errors.New(response.Message))
+        s.error(c, http.StatusBadRequest, errVerifyFailed)
         return
     }
 

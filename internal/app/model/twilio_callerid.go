@@ -27,10 +27,6 @@ func (m *TwilioCallerId) Dump() string {
     m.Status = 0
     m.Message = ""
 
-    b, err := json.Marshal(m)
-    if err != nil {
-        return ""
-    }
-
+    b, _ := json.Marshal(m)
     return string(b)
 }
