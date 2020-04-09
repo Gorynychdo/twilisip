@@ -7,4 +7,5 @@ require (
 	github.com/gin-gonic/gin v1.6.2
 	github.com/google/uuid v1.1.1
 	github.com/levigross/grequests v0.0.0-20190908174114-253788527a1a
+	github.com/lib/pq v1.3.0
 )
